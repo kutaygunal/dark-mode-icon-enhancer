@@ -47,22 +47,38 @@ class ProcessArrayTest(unittest.TestCase):
         out = process_array(arr)
         self.assertEqual(tuple(out[0, 0]), (30, 30, 30, 0))
 
-    def test_colorful_pixel_is_untouched(self):
+    def test_colorful_pixel_is_untouched_in_gray_mode(self):
         arr = np.zeros((1, 1, 4), dtype=np.uint8)
         arr[0, 0] = (200, 20, 20, 255)  # saturated red, high variance
-        out = process_array(arr)
+        out = process_array(arr, mode="gray")
         self.assertEqual(tuple(out[0, 0]), (200, 20, 20, 255))
 
-    def test_light_pixel_is_untouched_in_dark_to_light(self):
+    def test_colorful_pixel_is_darkened_in_full_mode(self):
+        arr = np.zeros((1, 1, 4), dtype=np.uint8)
+        arr[0, 0] = (200, 20, 20, 255)  # saturated red
+        out = process_array(arr, direction="light_to_dark", mode="full")
+        r, g, b, a = out[0, 0]
+        self.assertLess(r, 200)  # red channel darkened
+        self.assertEqual(a, 255)
+
+    def test_colorful_pixel_is_lightened_in_full_mode(self):
+        arr = np.zeros((1, 1, 4), dtype=np.uint8)
+        arr[0, 0] = (20, 20, 200, 255)  # saturated blue
+        out = process_array(arr, direction="dark_to_light", mode="full")
+        r, g, b, a = out[0, 0]
+        self.assertGreater(b, 200)  # blue channel lightened
+        self.assertEqual(a, 255)
+
+    def test_light_pixel_is_untouched_in_dark_to_light_gray(self):
         arr = np.zeros((1, 1, 4), dtype=np.uint8)
         arr[0, 0] = (200, 200, 200, 255)  # light gray, above avg threshold
-        out = process_array(arr, direction="dark_to_light")
+        out = process_array(arr, direction="dark_to_light", mode="gray")
         self.assertEqual(tuple(out[0, 0]), (200, 200, 200, 255))
 
-    def test_dark_pixel_is_untouched_in_light_to_dark(self):
+    def test_dark_pixel_is_untouched_in_light_to_dark_gray(self):
         arr = np.zeros((1, 1, 4), dtype=np.uint8)
         arr[0, 0] = (30, 30, 30, 255)  # dark gray, below avg threshold
-        out = process_array(arr, direction="light_to_dark")
+        out = process_array(arr, direction="light_to_dark", mode="gray")
         self.assertEqual(tuple(out[0, 0]), (30, 30, 30, 255))
 
     def test_thresholds_are_respected(self):
@@ -70,7 +86,7 @@ class ProcessArrayTest(unittest.TestCase):
         arr[0, 0] = (100, 100, 100, 255)
         # With a very low avg threshold, this pixel should NOT be converted.
         out = process_array(arr, variance_threshold=30, avg_threshold=50,
-                            direction="dark_to_light")
+                            direction="dark_to_light", mode="gray")
         self.assertEqual(tuple(out[0, 0]), (100, 100, 100, 255))
 
 

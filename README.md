@@ -48,17 +48,56 @@ Here are **5 complex icons** (from the Font Awesome icon set) converted with the
 
 ---
 
+## 🎨 Icons8 Sample Icons
+
+Here are **5 colorful Icons8 icons** converted with the tool in `full` mode (which preserves brand colors while shifting brightness). Each icon is shown separately — original on the left, converted dark version on the right.
+
+### 🛍️ App Store
+
+| Original | Converted (dark) |
+|---|---|
+| ![App Store original](samples/Icons/icons8-app-store-96.png) | ![App Store dark](samples/Icons/icons8-app-store-96_dark.png) |
+
+### 🧠 Apple Intelligence
+
+| Original | Converted (dark) |
+|---|---|
+| ![Apple Intelligence original](samples/Icons/icons8-apple-intelligence-96.png) | ![Apple Intelligence dark](samples/Icons/icons8-apple-intelligence-96_dark.png) |
+
+### 🎵 Apple Music Lyrics
+
+| Original | Converted (dark) |
+|---|---|
+| ![Apple Music Lyrics original](samples/Icons/icons8-apple-music-lyrics-96.png) | ![Apple Music Lyrics dark](samples/Icons/icons8-apple-music-lyrics-96_dark.png) |
+
+### 🤖 DeepSeek
+
+| Original | Converted (dark) |
+|---|---|
+| ![DeepSeek original](samples/Icons/icons8-deepseek-96.png) | ![DeepSeek dark](samples/Icons/icons8-deepseek-96_dark.png) |
+
+### 🎶 Music
+
+| Original | Converted (dark) |
+|---|---|
+| ![Music original](samples/Icons/icons8-music-96.png) | ![Music dark](samples/Icons/icons8-music-96_dark.png) |
+
+> 💡 **Result:** each icon's mean brightness dropped significantly (e.g. App Store `153 → 91`, Apple Music Lyrics `197 → 93`) while brand colors and transparency were preserved.
+
+---
+
 ## ✨ Features
 
 - User-friendly GUI interface
 - Live preview of both original and converted icons
 - **Two conversion directions**: `light_to_dark` and `dark_to_light`
+- **Two modes**: `full` (works on colorful icons too) and `gray` (gray-only)
 - Batch processing of multiple files at once
 - Drag-and-drop file support
 - Supports various image formats (PNG, JPG, ICO, GIF, BMP, WEBP)
 - Preserves transparency in icons
 - Handles animated GIFs and multi-size ICOs
-- Configurable conversion thresholds (gray tolerance, brightness threshold)
+- Configurable conversion strength / thresholds
 - Choose output folder and output format
 - Fast vectorized (numpy) pixel processing
 
@@ -91,7 +130,13 @@ dark-mode-icon-enhancer/
 │   ├── shield-halved.png / shield-halved_dark.png
 │   ├── camera.png / camera_dark.png
 │   ├── music.png / music_dark.png
-│   └── comparison.png         # Before/after grid used in this README
+│   ├── comparison.png         # Before/after grid used in this README
+│   └── Icons/                 # Icons8 sample icons (original + converted)
+│       ├── icons8-app-store-96.png / _dark.png
+│       ├── icons8-apple-intelligence-96.png / _dark.png
+│       ├── icons8-apple-music-lyrics-96.png / _dark.png
+│       ├── icons8-deepseek-96.png / _dark.png
+│       └── icons8-music-96.png / _dark.png
 └── README.md                  # This file
 ```
 
@@ -132,11 +177,12 @@ python icon_converter.py
 
 1. Click **"Select Icon(s)"** to choose your icon files (or drag-and-drop them onto the window)
 2. Choose a **direction** (`light_to_dark` or `dark_to_light`)
-3. Optionally pick an **output folder** and **output format**
-4. Adjust the **conversion thresholds** (gray tolerance, brightness threshold) if needed
-5. Click **"Convert"**
-6. The app shows a preview of both the original and converted icons
-7. Converted icons are saved with `_dark` or `_light` added to the filename
+3. Choose a **mode**: `full` (handles colorful icons) or `gray` (gray-only)
+4. Optionally pick an **output folder** and **output format**
+5. Adjust the **strength / threshold** if needed
+6. Click **"Convert"**
+7. The app shows a preview of both the original and converted icons
+8. Converted icons are saved with `_dark` or `_light` added to the filename
 
 ### Programmatic use
 
@@ -146,12 +192,13 @@ The core processing functions can also be used directly:
 from pathlib import Path
 import icon_converter as ic
 
-# Convert a light icon to a dark variant
+# Convert a colorful light icon to a dark variant (full mode)
 ic.save_processed(
     Path("icon.png"),
     Path("icon_dark.png"),
     output_format="PNG",
     direction="light_to_dark",
+    mode="full",
 )
 ```
 
@@ -161,11 +208,14 @@ ic.save_processed(
 
 The application analyzes each pixel in your icon:
 
-- Detects **grayish** colors (low RGB variance)
-- In `light_to_dark` mode, darkens pixels **lighter** than the brightness threshold
-- In `dark_to_light` mode, lightens pixels **darker** than the brightness threshold
-- Keeps other colors unchanged
-- Maintains transparency
+- **`full` mode** (default): converts **all opaque pixels**, preserving hue while
+  shifting brightness. This works for colorful brand icons as well as gray ones.
+- **`gray` mode**: converts only grayish pixels (low RGB variance), leaving
+  saturated colors untouched.
+- In `light_to_dark` mode, pixels are darkened; in `dark_to_light` mode, they are
+  lightened.
+- The **strength / threshold** slider controls how strong the conversion is.
+- Transparency is always maintained.
 
 The pixel loop is **vectorized with NumPy** for speed, and multi-frame images (animated GIFs, multi-size ICOs) are processed frame-by-frame.
 
