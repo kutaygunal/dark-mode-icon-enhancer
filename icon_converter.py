@@ -1,9 +1,11 @@
 """Dark Mode Icon Converter.
 
-A desktop application that converts dark/grayish icons into lighter versions so
-they remain visible against dark-mode backgrounds.
+A desktop application that converts icons between light and dark variants so
+they remain visible on either dark-mode or light-mode backgrounds.
 
 Features:
+    - Convert dark icons to light (for dark-mode visibility)
+    - Convert light icons to dark (for light-mode visibility)
     - Batch processing of multiple files at once
     - Drag-and-drop support (when tkinterdnd2 is installed)
     - Configurable conversion thresholds
@@ -36,6 +38,8 @@ except ImportError:  # pragma: no cover - depends on optional package
 PREVIEW_SIZE: Tuple[int, int] = (200, 200)
 DEFAULT_VARIANCE_THRESHOLD: int = 30
 DEFAULT_AVG_THRESHOLD: int = 160
+DEFAULT_DIRECTION: str = "light_to_dark"
+DIRECTIONS: Tuple[str, ...] = ("light_to_dark", "dark_to_light")
 SUPPORTED_FORMATS: Tuple[str, ...] = ("PNG", "JPG", "ICO", "GIF", "BMP", "WEBP")
 IMAGE_FILE_TYPES: Tuple[Tuple[str, str], ...] = (
     ("Image files", "*.png *.jpg *.jpeg *.ico *.gif *.bmp *.webp"),
@@ -50,12 +54,20 @@ def process_array(
     rgba: np.ndarray,
     variance_threshold: float = DEFAULT_VARIANCE_THRESHOLD,
     avg_threshold: float = DEFAULT_AVG_THRESHOLD,
+    direction: str = DEFAULT_DIRECTION,
 ) -> np.ndarray:
-    """Lighten dark/grayish pixels in an RGBA array (H, W, 4) uint8.
+    """Convert grayish pixels in an RGBA array (H, W, 4) uint8.
 
-    A pixel is converted when it is non-transparent, has low color variance
-    (i.e. is grayish) and is darker than ``avg_threshold``. Converted pixels
-    are whitened while preserving a slight color tint.
+    A pixel is converted when it is non-transparent and has low color variance
+    (i.e. is grayish). ``direction`` selects which side of the brightness
+    threshold is converted:
+
+      - ``"dark_to_light"``: lighten pixels darker than ``avg_threshold``
+        (for dark-mode visibility).
+      - ``"light_to_dark"``: darken pixels lighter than ``avg_threshold``
+        (for light-mode visibility).
+
+    Converted pixels keep a slight color tint.
     """
     r = rgba[..., 0].astype(np.float32)
     g = rgba[..., 1].astype(np.float32)
@@ -67,12 +79,20 @@ def process_array(
         [np.abs(r - avg), np.abs(g - avg), np.abs(b - avg)]
     )
 
-    mask = (a > 0) & (variance < variance_threshold) & (avg < avg_threshold)
+    grayish = (a > 0) & (variance < variance_threshold)
 
-    factor = (255.0 - avg) / 255.0
-    new_r = r + (255.0 - r) * factor
-    new_g = g + (255.0 - g) * factor
-    new_b = b + (255.0 - b) * factor
+    if direction == "light_to_dark":
+        mask = grayish & (avg > avg_threshold)
+        factor = avg / 255.0
+        new_r = r * (1.0 - factor)
+        new_g = g * (1.0 - factor)
+        new_b = b * (1.0 - factor)
+    else:  # dark_to_light
+        mask = grayish & (avg < avg_threshold)
+        factor = (255.0 - avg) / 255.0
+        new_r = r + (255.0 - r) * factor
+        new_g = g + (255.0 - g) * factor
+        new_b = b + (255.0 - b) * factor
 
     out = rgba.copy()
     out[..., 0] = np.where(mask, new_r, r).astype(np.uint8)
@@ -85,12 +105,13 @@ def process_pil_image(
     img: Image.Image,
     variance_threshold: float = DEFAULT_VARIANCE_THRESHOLD,
     avg_threshold: float = DEFAULT_AVG_THRESHOLD,
+    direction: str = DEFAULT_DIRECTION,
 ) -> Image.Image:
     """Process a single PIL image frame, returning a new RGBA image."""
     if img.mode != "RGBA":
         img = img.convert("RGBA")
     arr = np.array(img)
-    processed = process_array(arr, variance_threshold, avg_threshold)
+    processed = process_array(arr, variance_threshold, avg_threshold, direction)
     return Image.fromarray(processed, "RGBA")
 
 
@@ -107,6 +128,7 @@ def save_processed(
     variance_threshold: float = DEFAULT_VARIANCE_THRESHOLD,
     avg_threshold: float = DEFAULT_AVG_THRESHOLD,
     output_format: str = "PNG",
+    direction: str = DEFAULT_DIRECTION,
 ) -> None:
     """Process every frame of ``input_path`` and save to ``output_path``.
 
@@ -117,7 +139,9 @@ def save_processed(
         output_format = "JPEG"
     with Image.open(input_path) as img:
         frames: List[Image.Image] = [
-            process_pil_image(frame, variance_threshold, avg_threshold)
+            process_pil_image(
+                frame, variance_threshold, avg_threshold, direction
+            )
             for frame in ImageSequence.Iterator(img)
         ]
 
@@ -146,11 +170,13 @@ def build_output_path(
     input_path: Path,
     output_dir: Optional[Path],
     output_format: str,
+    direction: str = DEFAULT_DIRECTION,
 ) -> Path:
-    """Build the output path with a ``_dark_mode`` suffix and chosen format."""
+    """Build the output path with a direction suffix and chosen format."""
     output_format = output_format.upper()
     suffix = ".jpg" if output_format in ("JPG", "JPEG") else f".{output_format.lower()}"
-    filename = f"{input_path.stem}_dark_mode{suffix}"
+    tag = "_dark" if direction == "light_to_dark" else "_light"
+    filename = f"{input_path.stem}{tag}{suffix}"
     directory = output_dir if output_dir is not None else input_path.parent
     return directory / filename
 
@@ -226,30 +252,44 @@ class IconConverter(ctk.CTk):
         self.format_menu.set("PNG")
         self.format_menu.grid(row=2, column=1, padx=10, pady=5, sticky="w")
 
+        # Direction
+        self.direction_label = ctk.CTkLabel(
+            controls, text="Direction:", font=("Arial", 12)
+        )
+        self.direction_label.grid(row=3, column=0, padx=10, pady=5, sticky="e")
+
+        self.direction_menu = ctk.CTkOptionMenu(
+            controls, values=list(DIRECTIONS), width=160
+        )
+        self.direction_menu.set(DEFAULT_DIRECTION)
+        self.direction_menu.grid(row=3, column=1, padx=10, pady=5, sticky="w")
+
         # Thresholds
         self.variance_label = ctk.CTkLabel(
             controls, text="Gray tolerance:", font=("Arial", 12)
         )
-        self.variance_label.grid(row=3, column=0, padx=10, pady=5, sticky="e")
+        self.variance_label.grid(row=4, column=0, padx=10, pady=5, sticky="e")
 
         self.variance_slider = ctk.CTkSlider(
             controls, from_=0, to=100, number_of_steps=100
         )
         self.variance_slider.set(DEFAULT_VARIANCE_THRESHOLD)
-        self.variance_slider.grid(row=3, column=1, padx=10, pady=5, sticky="ew")
+        self.variance_slider.grid(row=4, column=1, padx=10, pady=5, sticky="ew")
 
-        self.avg_label = ctk.CTkLabel(controls, text="Darkness limit:", font=("Arial", 12))
-        self.avg_label.grid(row=4, column=0, padx=10, pady=5, sticky="e")
+        self.avg_label = ctk.CTkLabel(
+            controls, text="Brightness threshold:", font=("Arial", 12)
+        )
+        self.avg_label.grid(row=5, column=0, padx=10, pady=5, sticky="e")
 
         self.avg_slider = ctk.CTkSlider(controls, from_=0, to=255, number_of_steps=255)
         self.avg_slider.set(DEFAULT_AVG_THRESHOLD)
-        self.avg_slider.grid(row=4, column=1, padx=10, pady=5, sticky="ew")
+        self.avg_slider.grid(row=5, column=1, padx=10, pady=5, sticky="ew")
 
         # Process button
         self.process_button = ctk.CTkButton(
             controls, text="Convert", command=self.process_selected, state="disabled"
         )
-        self.process_button.grid(row=5, column=0, columnspan=2, padx=10, pady=10)
+        self.process_button.grid(row=6, column=0, columnspan=2, padx=10, pady=10)
 
     def _build_previews(self) -> None:
         self.preview_frame = ctk.CTkFrame(self.main_frame)
@@ -329,6 +369,7 @@ class IconConverter(ctk.CTk):
                     original,
                     self.variance_slider.get(),
                     self.avg_slider.get(),
+                    self.direction_menu.get(),
                 )
             self.original_photo = self._create_preview(
                 original, self.original_image_label
@@ -356,6 +397,7 @@ class IconConverter(ctk.CTk):
         variance = self.variance_slider.get()
         avg = self.avg_slider.get()
         output_format = self.format_menu.get()
+        direction = self.direction_menu.get()
 
         total = len(self.files)
         self.progress.set(0)
@@ -376,6 +418,7 @@ class IconConverter(ctk.CTk):
                     variance_threshold=variance,
                     avg_threshold=avg,
                     output_format=output_format,
+                    direction=direction,
                 )
                 results.append(str(output_path))
             except Exception as exc:
