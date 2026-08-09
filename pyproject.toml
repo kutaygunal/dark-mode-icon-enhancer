@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dark-mode-icon-enhancer"
+version = "1.1.0"
+description = "Convert dark/grayish icons to be visible in dark mode."
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "Pillow>=10.0.0",
+    "customtkinter>=5.2.0",
+    "numpy>=1.24.0",
+]
+
+[project.optional-dependencies]
+dragdrop = ["tkinterdnd2>=0.3.0"]
+dev = ["pytest"]
+
+[project.scripts]
+dark-mode-icon-enhancer = "icon_converter:main"
+
+[tool.setuptools]
+py-modules = ["icon_converter"]
